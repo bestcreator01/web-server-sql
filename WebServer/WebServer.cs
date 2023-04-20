@@ -65,9 +65,9 @@ namespace WebServer
         {
             // FIXME: this should be a complete web page.
             return $@"
-<h1>hello world{counter}</h1>
-<a href='localhost:11000'>Reload</a> 
-<br/>how are you...";
+            <h1>hello world{counter}</h1>
+            <a href='localhost:11000'>Reload</a> 
+            <br/>how are you...";
         }
 
         /// <summary>
@@ -160,6 +160,10 @@ namespace WebServer
             throw new NotImplementedException("create the database tables by 'talking' with the DB server and then return an informative web page");
         }
 
+        /// <summary>
+        ///     TODO
+        /// </summary>
+        /// <param name="channel"></param>
         internal static void OnDisconnect(Networking channel)
         {
             Debug.WriteLine($"Goodbye {channel.RemoteAddressPort}");
