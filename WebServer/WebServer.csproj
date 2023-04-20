@@ -7,4 +7,10 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Reference Include="Communications">
+      <HintPath>..\..\assignment8agario-northkoreannotsouth\Communications.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
 </Project>
