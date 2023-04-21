@@ -14,3 +14,5 @@
 ///     This class contains console application of the WebServer project.
 ///     
 /// </summary>
+
+WebServer.WebServer.Main(new string[] { "" });

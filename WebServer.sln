@@ -3,7 +3,13 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.5.33424.131
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WebServer", "WebServer\WebServer.csproj", "{B4D17000-9E3E-41FD-946F-31B7768D29F6}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "WebServer", "WebServer\WebServer.csproj", "{B4D17000-9E3E-41FD-946F-31B7768D29F6}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{7349DF82-9DDB-4A03-9555-A10190F31B94}"
+	ProjectSection(SolutionItems) = preProject
+		..\assignment8agario-northkoreannotsouth\Communications.dll = ..\assignment8agario-northkoreannotsouth\Communications.dll
+		README.md = README.md
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

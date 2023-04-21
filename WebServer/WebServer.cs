@@ -1,5 +1,6 @@
 ﻿using Communications;
 using System.Diagnostics;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace WebServer
 {
@@ -21,6 +22,13 @@ namespace WebServer
     /// </summary>
     public class WebServer
     {
+        public static void Main(string[] args)
+        {
+            Networking webServer = new(NullLogger.Instance, OnClientConnect, OnDisconnect, OnMessage, '\n');
+
+            webServer.WaitForClients(11001, true);
+        }
+
         /// <summary>
         /// keep track of how many requests have come in.  Just used
         /// for display purposes.
@@ -132,9 +140,22 @@ namespace WebServer
         ///   </para>
         /// </summary>
         /// <param name="network_message_state"> provided by the Networking code, contains socket and message</param>
-        internal static void onMessage(Networking channel, string message)
+        internal static void OnMessage(Networking channel, string message)
         {
-            throw new NotImplementedException("see comments");
+            string header = $@"
+
+
+            ";
+
+            string body = $@"
+            
+            ";
+
+            channel.Send(header);
+            channel.Send("");
+            channel.Send(body);
+
+            Console.WriteLine(message);
         }
 
         /// <summary>
