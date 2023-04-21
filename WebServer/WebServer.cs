@@ -90,8 +90,6 @@ namespace WebServer
             return header + message;
         }
 
-
-
         /// <summary>
         ///   <para>
         ///     When a request comes in (from a browser) this method will
@@ -148,7 +146,6 @@ namespace WebServer
             throw new NotSupportedException("read the css file from the solution folder, build an http response, and return this string");
             //Note: for starters, simply return a static hand written css string from right here (don't do file reading)
         }
-
 
         /// <summary>
         ///    (1) Instruct the DB to seed itself (build tables, add data)
