@@ -24,8 +24,10 @@ namespace WebServer
     {
         public static void Main(string[] args)
         {
-            Networking webServer = new(NullLogger.Instance, OnClientConnect, OnDisconnect, OnMessage, '\n');
+            // Check if the web server is running or not.
+            Console.WriteLine("Web Server Running!");
 
+            Networking webServer = new(NullLogger.Instance, OnClientConnect, OnDisconnect, OnMessage, '\n');
             webServer.WaitForClients(11001, true);
         }
 
@@ -43,7 +45,7 @@ namespace WebServer
 
         internal static void OnClientConnect(Networking channel)
         {
-            throw new NotImplementedException("Print something about a connection happening");
+            Console.WriteLine($"A client is connected!: {channel.ID} ");
         }
 
         /// <summary>
@@ -60,7 +62,16 @@ namespace WebServer
         /// <returns>returns a string with the response header</returns>
         private static string BuildHTTPResponseHeader(int length, string type = "text/html")
         {
-            throw new NotImplementedException("Modify this to return an actual HTTP protocol message");
+            return $@"
+            HTTP/1.1 200 OK
+            Date: Mon, 27 Jul 2009 12:28:53 GMT
+            Server: HeavyEyeBagsMadeBy3500
+            Last-Modified: Fri, 21 Apr 2023 17:46:35 
+            Content-Length: {length}
+            Content-Type: {type}
+            Connection: Closed
+            "
+            + "\n";
         }
 
         /// <summary>
@@ -73,9 +84,16 @@ namespace WebServer
         {
             // FIXME: this should be a complete web page.
             return $@"
-            <h1>hello world{counter}</h1>
-            <a href='localhost:11000'>Reload</a> 
-            <br/>how are you...";
+            <!DOCTYPE html>
+            <html>
+                <body> 
+                    <h1> my {counter} times heading </h1>
+                    <p> i am seoin and gloria next to me 
+                    <br> how are you... </p>
+                    <a href='localhost:11000'>Reload </a>
+                </body>
+            </html>
+            ";
         }
 
         /// <summary>
@@ -142,20 +160,10 @@ namespace WebServer
         /// <param name="network_message_state"> provided by the Networking code, contains socket and message</param>
         internal static void OnMessage(Networking channel, string message)
         {
-            string header = $@"
+            Console.WriteLine($"Message received: {message}");
 
-
-            ";
-
-            string body = $@"
-            
-            ";
-
-            channel.Send(header);
-            channel.Send("");
-            channel.Send(body);
-
-            Console.WriteLine(message);
+            // Send the main page to the web.
+            // channel.Send(BuildMainPage());
         }
 
         /// <summary>
@@ -179,12 +187,12 @@ namespace WebServer
         }
 
         /// <summary>
-        ///     TODO
+        ///     This is called when a network connection is lost or disconnected.
         /// </summary>
         /// <param name="channel"></param>
         internal static void OnDisconnect(Networking channel)
         {
-            Debug.WriteLine($"Goodbye {channel.RemoteAddressPort}");
+            Console.WriteLine($"Goodbye {channel.ID}");
         }
 
     }
