@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Text.RegularExpressions;
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Configuration;
 
 namespace WebServer
 {
@@ -23,21 +24,7 @@ namespace WebServer
     /// </summary>
     public class WebServer
     {
-        public WebServer()
-        {
-
-        }
-        public static void Main(string[] args)
-        {
-            // Check if the web server is running or not.
-            Console.WriteLine("Web Server working!");
-
-            Networking webServer = new(NullLogger.Instance, OnClientConnect, OnDisconnect, OnMessage, '\n');
-            webServer.WaitForClients(11001, true);
-
-            Console.ReadLine();
-        }
-
+        /* FIELDS */
         /// <summary>
         /// keep track of how many requests have come in.  Just used
         /// for display purposes.
@@ -45,16 +32,47 @@ namespace WebServer
         static private int counter = 0;
 
         /// <summary>
-        /// Basic connect handler - i.e., a browser has connected!
-        /// Print an information message
+        ///     The information necessary for the program to connec to the Database.
         /// </summary>
-        /// <param name="channel"> the Networking connection</param>
+        public static readonly string connectionString;
 
-        internal static void OnClientConnect(Networking channel)
+        /// <summary>
+        ///     Default constructor - sets up the SQL connection.
+        /// </summary>
+        static WebServer()
         {
-            Console.WriteLine($"A client is connected!: {channel.ID} ");
+            var builder = new ConfigurationBuilder();
+
+            builder.AddUserSecrets<WebServer>();
+            IConfigurationRoot Configuration = builder.Build();
+            var SelectedSecrets = Configuration.GetSection("WebserverSecrets");
+
+            connectionString = new SqlConnectionStringBuilder()
+            {
+                DataSource = SelectedSecrets["sever_name"],
+                InitialCatalog = "cs3500",
+                UserID = SelectedSecrets["UserID"],
+                Password = SelectedSecrets["DBPassword"],
+                Encrypt = false
+            }.ConnectionString;
         }
 
+        /// <summary>
+        ///     Main function of this program.
+        /// </summary>
+        /// <param name="args"> command line arguments </param>
+        public static void Main(string[] args)
+        {
+            Console.WriteLine("Web Server running!");
+            Console.WriteLine(connectionString);
+
+            Networking webServer = new(NullLogger.Instance, OnClientConnect, OnDisconnect, OnMessage, '\n');
+            webServer.WaitForClients(11001, true);
+
+            Console.ReadLine();
+        }
+
+        /* HEADER AND BODY*/
         /// <summary>
         /// Create the HTTP message header, containing items such as
         /// the "HTTP/1.1 200 OK" message.
@@ -94,8 +112,6 @@ Connection: Closed
             }
         }
 
-        /* BODY */
-
         /// <summary>
         ///   Create a web page!  The body of the returned message is the web page
         ///   "code" itself. Usually this would start with the doctype tag followed by the HTML element.  Take a look at:
@@ -131,7 +147,6 @@ Connection: Closed
         }
 
         /* PAGES */
-
         /// <summary>
         /// Create a message message string to send back to the connecting
         /// program (i.e., the web browser).  The string is of the form:
@@ -198,6 +213,16 @@ Connection: Closed
         }
 
         /* CALLBACK */
+        /// <summary>
+        /// Basic connect handler - i.e., a browser has connected!
+        /// Print an information message
+        /// </summary>
+        /// <param name="channel"> the Networking connection</param>
+
+        internal static void OnClientConnect(Networking channel)
+        {
+            Console.WriteLine($"A client is connected!: {channel.ID} ");
+        }
 
         /// <summary>
         ///   <para>
@@ -257,6 +282,9 @@ Connection: Closed
                 if (message.Contains(playerName))
                 {
 
+                } else
+                {
+                    // TODO - Show a message that there is no player whose name is playerName.
                 }
             }
             else if (message.Contains("fancy"))
@@ -324,22 +352,33 @@ Connection: Closed
 
         /* SQL */
 
-        /// <summary>
-        ///     Try to add a row to the database table
-        ///     
-        /// </summary>
-        private static void AddClients()
-        {
-            Console.WriteLine("Can we add a row?");
-            try
-            {
-                using SqlConnection con = new SqlConnection();
-            }
-            catch (SqlException exception)
-            {
+        ///// <summary>
+        /////     Try to add a row to the database table
+        /////     
+        ///// </summary>
+        //private static void AddClients()
+        //{
+        //    Console.WriteLine("Can we add a row?");
+        //    try
+        //    {
+        //        using SqlConnection con = new SqlConnection(connectionString);
 
-            }
-        }
+        //        con.Open();
+
+        //        using SqlCommand command = new SqlCommand("TODO");
+        //        using SqlDataReader reader = command.ExecuteReader();
+
+        //        while (reader.Read())
+        //        {
+        //            Console.WriteLine("{0} {1}",
+        //                reader.GetInt32(0), reader.GetString(1));
+        //        }
+        //    }
+        //    catch (SqlException exception)
+        //    {
+        //        Console.WriteLine($"Error in SQL connection:\n   - {exception.Message}");
+        //    }
+        //}
 
         /// <summary>
         /// Handle some CSS to make our pages beautiful
@@ -358,8 +397,74 @@ Connection: Closed
         /// <returns> the HTTP message header followed by some informative information</returns>
         private static string CreateDBTablesPage()
         {
-            throw new NotImplementedException("create the database tables by 'talking' with the DB server and then return an informative web page");
-        }
+            try
+            {
+                // Connect to the database
+                string connectionString = "Data Source=cs3500.eng.utah.edu,14330;Initial Catalog=agario_db;Integrated Security=True;";
+                using (SqlConnection connection = new SqlConnection(connectionString))
+                {
+                    connection.Open();
 
+                    // Create the tables
+                    using (SqlCommand command = new SqlCommand())
+                    {
+                        command.Connection = connection;
+                        command.CommandText = @"
+                    CREATE TABLE IF NOT EXISTS Players (
+                        Name VARCHAR(50) NOT NULL,
+                        Id INT NOT NULL,
+                        PRIMARY KEY (Name, Id)
+                    );
+                    CREATE TABLE IF NOT EXISTS Games (
+                        Id INT NOT NULL,
+                        PlayerName VARCHAR(50) NOT NULL,
+                        StartTime DATETIME NOT NULL,
+                        EndTime DATETIME,
+                        Size INT NOT NULL,
+                        Rank INT NOT NULL,
+                        PRIMARY KEY (Id, PlayerName),
+                        FOREIGN KEY (PlayerName, Id) REFERENCES Players(Name, Id)
+                    );
+                ";
+                        command.ExecuteNonQuery();
+                    }
+
+                    // Insert some data into the tables
+                    using (SqlCommand command = new SqlCommand())
+                    {
+                        command.Connection = connection;
+                        command.CommandText = @"
+                    INSERT INTO Players (Name, Id) VALUES
+                        ('Alice', 1),
+                        ('Bob', 2),
+                        ('Charlie', 3),
+                        ('David', 4),
+                        ('Eve', 5);
+                    INSERT INTO Games (Id, PlayerName, StartTime, EndTime, Size, Rank) VALUES
+                        (1, 'Alice', '2023-04-21 10:00:00', '2023-04-21 10:10:00', 100, 1),
+                        (1, 'Bob', '2023-04-21 10:00:00', '2023-04-21 10:05:00', 80, 2),
+                        (1, 'Charlie', '2023-04-21 10:00:00', '2023-04-21 10:08:00', 90, 3),
+                        (2, 'Alice', '2023-04-22 15:00:00', '2023-04-22 15:20:00', 120, 1),
+                        (2, 'Bob', '2023-04-22 15:00:00', '2023-04-22 15:05:00', 60, 2),
+                        (2, 'David', '2023-04-22 15:00:00', '2023-04-22 15:12:00', 80, 3);
+                ";
+                        command.ExecuteNonQuery();
+                    }
+
+                    // Close the connection
+                    connection.Close();
+                }
+
+                // Return a success message
+                return "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\n" +
+                       "Database tables and data have been successfully created.";
+            }
+            catch (Exception ex)
+            {
+                // Return an error message
+                return "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\n\r\n" +
+                       "An error occurred while creating the database tables and data: " + ex.Message;
+            }
+        }
     }
 }
