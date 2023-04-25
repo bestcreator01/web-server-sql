@@ -20,7 +20,7 @@ in Academic Coursework.
 
 	1. Assignment Nine - WebServer
 		Predicted Hours:	15
-		Actual Hours:		3 + 2
+		Actual Hours:		7
 
 		Note:
 
