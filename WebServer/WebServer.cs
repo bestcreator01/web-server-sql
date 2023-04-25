@@ -229,7 +229,7 @@ Connection: Closed
 <html>
 <head>
 <meta charset='UTF-8'>
-<title> Error </title>
+<title> Page Not Found </title>
 </head>
 <body>
 <h1> This webpage does not exist </h1>
@@ -377,13 +377,17 @@ Connection: Closed
             {
                 SendResponseMessage(BuildMainPage(), channel);
             }
+            else if (message.Contains("favicon"))   // Do nothing.
+            {
+
+            }
             else if (message.Contains("highscores")) // High Scores Page
             {
                 SendResponseMessage(BuildHighScoresPage(), channel);
             }
             else if (message.Contains("scores")) // Scores for Particular Player Page
             {
-                playerName = GetPlayerNameFollowedByScores(message);
+                playerName = ParsePlayerName(message);
 
                 // Check if the name is contained in message.
                 if (message.Contains(playerName))
@@ -398,11 +402,15 @@ Connection: Closed
             }
             else if (message.Contains("scores/")) // Insert into Database Endpoint
             {
-                // TODO
+                var (name, highmass, highrank, starttime, endtime) = ParseInformationOfPlayer(message);
+                
+                // TODO - insert the above data into the DB.
             }
             else if (message.Contains("create"))
             {
-                // TODO - create a new database table.
+                CreateTablesOrDoNothing(channel);
+
+                // TODO - Seed some dummy data
 
                 SendResponseMessage(BuildCreatePage(), channel);
             }
@@ -424,11 +432,41 @@ Connection: Closed
         }
 
         /// <summary>
-        ///     Gets the player name followed by the string "/scores"
+        /// 
         /// </summary>
-        /// <param name="message"> The message to search in. </param>
+        /// <param name="channel"></param>
+        private static void CreateTablesOrDoNothing(Networking channel)
+        {
+            // if not, create new DB tables..
+            using (var connection = new SqlConnection(connectionString))
+            {
+                connection.Open();
+
+                // Check if the DB tables already exist..
+                string query = "IF (EXISTS (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Table1' OR TABLE_NAME = 'Table2'";
+                SqlCommand command = new SqlCommand(query, connection);
+
+                int tableCount = (int)command.ExecuteScalar();
+
+                if (tableCount == 6) // If all tables exist, do nothing.
+                {
+                    Console.WriteLine("Tables already exist.");
+                }
+                else // If not, create new DB tables.
+                {
+                    // TODO - call the create new DB table function.
+
+                    Console.WriteLine("Created new DB tables just now.");
+                }
+            }
+        }
+
+        /// <summary>
+        ///     Parses the player name from a message from a request message.
+        /// </summary>
+        /// <param name="message"> A request message from a webpage. </param>
         /// <returns> The player name </returns>
-        private static string GetPlayerNameFollowedByScores(string message)
+        private static string ParsePlayerName(string message)
         {
             // Get the name followed by "scores/"
             string playerName = "";
@@ -441,6 +479,35 @@ Connection: Closed
             }
 
             return playerName;
+        }
+
+        /// <summary>
+        ///     Parses the information of a specific player from a message from a request message.
+        /// </summary>
+        /// <param name="message"> A request message from a webpage. </param>
+        /// <returns></returns>
+        private static (string name, string highmass, string highrank, string starttime, string endtime) 
+                        ParseInformationOfPlayer(string message)
+        {
+            string pattern = @"scores\/([^\/]*)\/([^\/]*)\/([^\/]*)\/([^\/]*)\/([^\/]*)";
+            Match match = Regex.Match(message, pattern);
+
+            if (match.Success)
+            {
+                string name = match.Groups[1].Value;
+                string highmass = match.Groups[2].Value;
+                string highrank = match.Groups[3].Value;
+                string starttime = match.Groups[4].Value;
+                string endtime = match.Groups[5].Value;
+                Console.WriteLine($"Name: {name}\nHighmass: {highmass}\nHighrank: {highrank}\nStarttime: {starttime}\nEndtime: {endtime}");
+                
+                return (name, highmass, highrank, starttime, endtime);
+            } 
+            else
+            {
+                Console.WriteLine("No match found.");
+                return ("", "", "", "", "");
+            }
         }
 
         /// <summary>
