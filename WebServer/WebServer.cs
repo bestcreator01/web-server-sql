@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using System.Text.RegularExpressions;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
+using System.Text;
 
 namespace WebServer
 {
@@ -24,7 +25,9 @@ namespace WebServer
     /// </summary>
     public class WebServer
     {
+
         /* FIELDS */
+
         /// <summary>
         /// keep track of how many requests have come in.  Just used
         /// for display purposes.
@@ -37,6 +40,11 @@ namespace WebServer
         public static readonly string connectionString;
 
         /// <summary>
+        ///     The name of a player.
+        /// </summary>
+        private static string playerName;
+
+        /// <summary>
         ///     Default constructor - sets up the SQL connection.
         /// </summary>
         static WebServer()
@@ -45,12 +53,12 @@ namespace WebServer
 
             builder.AddUserSecrets<WebServer>();
             IConfigurationRoot Configuration = builder.Build();
-            var SelectedSecrets = Configuration.GetSection("WebserverSecrets");
+            var SelectedSecrets = Configuration.GetSection("WebServerSecrets");
 
             connectionString = new SqlConnectionStringBuilder()
             {
-                DataSource = SelectedSecrets["sever_name"],
-                InitialCatalog = "cs3500",
+                DataSource = SelectedSecrets["server_name"],
+                InitialCatalog = SelectedSecrets["DBName"],
                 UserID = SelectedSecrets["UserID"],
                 Password = SelectedSecrets["DBPassword"],
                 Encrypt = false
@@ -72,7 +80,9 @@ namespace WebServer
             Console.ReadLine();
         }
 
-        /* HEADER AND BODY*/
+
+        /* HEADER */
+
         /// <summary>
         /// Create the HTTP message header, containing items such as
         /// the "HTTP/1.1 200 OK" message.
@@ -112,6 +122,8 @@ Connection: Closed
             }
         }
 
+        /* BODY */
+
         /// <summary>
         ///   Create a web page!  The body of the returned message is the web page
         ///   "code" itself. Usually this would start with the doctype tag followed by the HTML element.  Take a look at:
@@ -137,82 +149,172 @@ Connection: Closed
         }
 
         /// <summary>
-        /// 
+        ///      Builds the body of an HTTP response containing the high scores.
         /// </summary>
-        /// <returns></returns>
-        private static string BuildHTTPBodyHighScores()
+        /// <returns> The body of the HTTP response containing the high scores. </returns>
+        private static string BuildHTTPHighScoresBody()
         {
             // TODO
+            counter++;
+
+            //CreateDBTablesPage();
+
+            string playersTable = BuildPlayersTable();
+
+            return $@"
+<html>
+<head>
+<meta charset='UTF-8'>
+<title>My Web Page</title>
+</head>
+<body>
+<h1>My {counter} Times Heading</h1>
+<p>I am Seoin and Gloria is next to me. I'm Good.</p>
+
+{playersTable}
+
+</body>
+</html>
+";
+        }
+
+        /// <summary>
+        ///     Builds the HTTP response body for retrieveing scores for a 
+        ///     a particular player.
+        /// </summary>
+        /// <returns> The HTTP response body for retrieving scores for a particular player. </returns>
+        private static string BuildHTTPScoreForParticularPlayerBody()
+        {
+            // TODO - Check if there is such player whose name is playerName.
+            if (playerName == "")
+            {
+                // TODO - using playerName on the field, get a score of the particular player from DB.
+            }
+            else
+            {
+                // Return a error body since there is no such a player.
+                BuildHTTPErrorBody();
+            }
+
             return "";
         }
 
-        /* PAGES */
         /// <summary>
-        /// Create a message message string to send back to the connecting
-        /// program (i.e., the web browser).  The string is of the form:
-        /// 
-        ///   HTTP Header
-        ///   [new message]
-        ///   HTTP Body
-        ///  
+        ///     Builds the HTTP response body for creating a new score entry.
+        /// </summary>
+        /// <returns> The HTTP response body for creating a new score entry. </returns>
+        private static string BuildHTTPCreateBody()
+        {
+            return $@"
+<html>
+<head>
+<meta charset='UTF-8'>
+<title> Created database tables! </title>
+</head>
+<body>
+<h1> You want to go to the main page? </h1>
+<a href='http://localhost:11001'> Main Page </a>
+</body>
+</html>
+";
+        }
+
+        /// <summary>
+        ///     Builds the body of an HTTP response containing an error message.
+        /// </summary>
+        /// <returns> The body of the HTTP response containing an error message. </returns>
+        private static string BuildHTTPErrorBody()
+        {
+            return $@"
+<html>
+<head>
+<meta charset='UTF-8'>
+<title> Error </title>
+</head>
+<body>
+<h1> This webpage does not exist </h1>
+<p> You want to go to the main page? </p>
+<a href='http://localhost:11001'> Main Page </a>
+</body>
+</html>
+";
+        }
+
+        /* PAGES */
+
+        /// <summary> 
+        ///     Builds the Main page.
+        ///
         ///  The Header must follow the header protocol.
         ///  The body should follow the HTML doc protocol.
         /// </summary>
         /// <returns> the complete HTTP message</returns>
         private static string BuildMainPage()
         {
-            string message = BuildHTTPBody();
-            string header = BuildHTTPResponseHeader(message.Length);
-
-            return header + "\r\n" + message;
+            return BuildPage(BuildHTTPBody());
         }
 
         /// <summary>
-        /// Create a message message string to send back to the connecting
-        /// program (i.e., the web browser).  The string is of the form:
-        /// 
-        ///   HTTP Header
-        ///   [new message]
-        ///   HTTP Body
-        ///   
-        /// This method is to build the High Scores page.
+        ///     Builds the High Scores page.
         /// </summary>
         /// <returns> the complete HTTP message for Scores Page </returns>
         private static string BuildHighScoresPage()
         {
-            string message = BuildHTTPBodyHighScores();
-            string header = BuildHTTPResponseHeader(message.Length);
-
-            return header + "\r\n" + message;
+            return BuildPage(BuildHTTPHighScoresBody());
         }
 
         /// <summary>
-        /// Create a message message string to send back to the connecting
-        /// program (i.e., the web browser).  The string is of the form:
-        /// 
-        ///   HTTP Header
-        ///   [new message]
-        ///   HTTP Body
-        ///   
-        /// This method is to build the page where you query the DB for all scores
-        /// associated with the given name and return an HTML web page with a summary
-        /// of the time and high score for each game played by the player.
+        ///     Builds the page where you query the DB for all scores associated 
+        ///     with the given name and return an HTML web page with a summary
+        ///     of the time and high score for each game played by the player.
         /// </summary>
-        /// <returns> the complete HTTP message for Scores For Particular Player Page </returns>
+        /// <returns> the complete HTTP message for Scores For Particular Player page </returns>
         private static string BuildScoresForParticularPlayerPage()
         {
-            // TODO
-            // if message contains Gloria...
-            // if message contains Seoin...
-            // if message contains Jim...
+            return BuildPage(BuildHTTPScoreForParticularPlayerBody());
+        }
 
-            string message = ""; // TODO
-            string header = BuildHTTPResponseHeader(message.Length);
+        /// <summary>
+        ///     Builds the page where you can build the required database tables
+        ///     and seed them with some dummy data.
+        /// </summary>
+        /// <returns> the complete HTTP message for Create page </returns>
+        private static string BuildCreatePage()
+        {
+            return BuildPage(BuildHTTPCreateBody());
+        }
 
-            return header + "\r\n" + message;
+        /// <summary>
+        ///     Builds the page where you show an error message on the webpage.
+        /// </summary>
+        /// <returns> the complete HTTP message for Error page </returns>
+        private static string BuildErrorPage()
+        {
+            return BuildPage(BuildHTTPErrorBody());
+        }
+
+        /// <summary>
+        ///     Helper method to build a complete HTTP response page by 
+        ///     combining the HTTP response header and the page body.
+        ///     
+        ///     Creates a message message string to send back to the connecting
+        ///     program (i.e., the web browser).  The string is of the form:
+        /// 
+        ///     HTTP Header
+        ///     [new message]
+        ///     HTTP Body
+        /// </summary>
+        /// <param name="body"> The body content of the page. </param>
+        /// <returns> A complete HTTP response page as a string. </returns>
+        private static string BuildPage(string body)
+        {
+            string header = BuildHTTPResponseHeader(body.Length);
+
+            return header + "\r\n" + body;
         }
 
         /* CALLBACK */
+
         /// <summary>
         /// Basic connect handler - i.e., a browser has connected!
         /// Print an information message
@@ -270,35 +372,52 @@ Connection: Closed
         {
             // Return an HTML page listing the top score for each player in the database.
             // "score" means the highest mass achieved by the player.
-            if (message.Contains("highscores")) // High Scores Page
+
+            if (message.Contains("index.html") || message.Contains("/ HTTP") || message.Contains("index")) // Main Page
+            {
+                SendResponseMessage(BuildMainPage(), channel);
+            }
+            else if (message.Contains("highscores")) // High Scores Page
             {
                 SendResponseMessage(BuildHighScoresPage(), channel);
             }
             else if (message.Contains("scores")) // Scores for Particular Player Page
             {
-                string playerName = GetPlayerNameFollowedByScores(message);
+                playerName = GetPlayerNameFollowedByScores(message);
 
                 // Check if the name is contained in message.
                 if (message.Contains(playerName))
                 {
-
-                } else
+                    SendResponseMessage(BuildScoresForParticularPlayerPage(), channel);
+                }
+                else
                 {
-                    // TODO - Show a message that there is no player whose name is playerName.
+                    // Show a message that there is no player whose name is playerName.
+                    SendResponseMessage(BuildErrorPage(), channel);
                 }
             }
-            else if (message.Contains("fancy"))
+            else if (message.Contains("scores/")) // Insert into Database Endpoint
+            {
+                // TODO
+            }
+            else if (message.Contains("create"))
+            {
+                // TODO - create a new database table.
+
+                SendResponseMessage(BuildCreatePage(), channel);
+            }
+            else if (message.Contains("fancy")) // Fancy Page
             {
                 // OPTIONAL
                 // A pretty HTML table with the data.
                 // TODO - make sure to include this in your README.
             }
-            else
+            else // Any other links that we do not support
             {
-                // Main Page
-                SendResponseMessage(BuildMainPage(), channel);
+                SendResponseMessage(BuildErrorPage(), channel);
             }
 
+            // Disconnects every time it receives a message.
             channel.Disconnect();
 
             Console.WriteLine(message);
@@ -318,7 +437,7 @@ Connection: Closed
             Match match = Regex.Match(message, pattern);
             if (match.Success)
             {
-                playerName = match.Value.Split('/').Last();
+                playerName = match.Groups[1].Value;
             }
 
             return playerName;
@@ -352,33 +471,33 @@ Connection: Closed
 
         /* SQL */
 
-        ///// <summary>
-        /////     Try to add a row to the database table
-        /////     
-        ///// </summary>
-        //private static void AddClients()
-        //{
-        //    Console.WriteLine("Can we add a row?");
-        //    try
-        //    {
-        //        using SqlConnection con = new SqlConnection(connectionString);
+        /// <summary>
+        ///     Try to add a row to the database table
+        ///     
+        /// </summary>
+        private static void AddClients()
+        {
+            //    Console.WriteLine("Can we add a row?");
+            //    try
+            //    {
+            //        using SqlConnection con = new SqlConnection(connectionString);
 
-        //        con.Open();
+            //        con.Open();
 
-        //        using SqlCommand command = new SqlCommand("TODO");
-        //        using SqlDataReader reader = command.ExecuteReader();
+            //        using SqlCommand command = new SqlCommand("TODO");
+            //        using SqlDataReader reader = command.ExecuteReader();
 
-        //        while (reader.Read())
-        //        {
-        //            Console.WriteLine("{0} {1}",
-        //                reader.GetInt32(0), reader.GetString(1));
-        //        }
-        //    }
-        //    catch (SqlException exception)
-        //    {
-        //        Console.WriteLine($"Error in SQL connection:\n   - {exception.Message}");
-        //    }
-        //}
+            //        while (reader.Read())
+            //        {
+            //            Console.WriteLine("{0} {1}",
+            //                reader.GetInt32(0), reader.GetString(1));
+            //        }
+            //    }
+            //    catch (SqlException exception)
+            //    {
+            //        Console.WriteLine($"Error in SQL connection:\n   - {exception.Message}");
+            //    }
+        }
 
         /// <summary>
         /// Handle some CSS to make our pages beautiful
@@ -391,80 +510,123 @@ Connection: Closed
         }
 
         /// <summary>
+        ///     TODO
+        /// </summary>
+        /// <returns></returns>
+        private static string BuildPlayersTable()
+        {
+            // Connect to the database
+            using (SqlConnection connection = new SqlConnection(connectionString))
+            {
+                connection.Open();
+
+                // Query the Players table for all rows
+                string query = "SELECT * FROM Players";
+                using (SqlCommand command = new SqlCommand(query, connection))
+                {
+                    using (SqlDataReader reader = command.ExecuteReader())
+                    {
+                        // Create an HTML table to display the results
+                        StringBuilder html = new StringBuilder();
+                        html.Append("<table>");
+                        html.Append("<tr><th>Name</th><th>Id</th></tr>");
+
+                        // Loop through the rows and add them to the table
+                        while (reader.Read())
+                        {
+                            html.Append("<tr>");
+                            html.Append($"<td>{reader.GetString(0)}</td>");
+                            html.Append($"<td>{reader.GetInt32(1)}</td>");
+                            html.Append("</tr>");
+                        }
+
+                        html.Append("</table>");
+
+                        return html.ToString();
+                    }
+                }
+            }
+        }
+
+        /// <summary>
         ///    (1) Instruct the DB to seed itself (build tables, add data)
         ///    (2) Report to the web browser on the success
         /// </summary>
         /// <returns> the HTTP message header followed by some informative information</returns>
         private static string CreateDBTablesPage()
         {
-            try
-            {
-                // Connect to the database
-                string connectionString = "Data Source=cs3500.eng.utah.edu,14330;Initial Catalog=agario_db;Integrated Security=True;";
-                using (SqlConnection connection = new SqlConnection(connectionString))
-                {
-                    connection.Open();
+            //    try
+            //    {
+            //        // Connect to the database
+            //        using (SqlConnection connection = new SqlConnection(connectionString))
+            //        {
+            //            connection.Open();
 
-                    // Create the tables
-                    using (SqlCommand command = new SqlCommand())
-                    {
-                        command.Connection = connection;
-                        command.CommandText = @"
-                    CREATE TABLE IF NOT EXISTS Players (
-                        Name VARCHAR(50) NOT NULL,
-                        Id INT NOT NULL,
-                        PRIMARY KEY (Name, Id)
-                    );
-                    CREATE TABLE IF NOT EXISTS Games (
-                        Id INT NOT NULL,
-                        PlayerName VARCHAR(50) NOT NULL,
-                        StartTime DATETIME NOT NULL,
-                        EndTime DATETIME,
-                        Size INT NOT NULL,
-                        Rank INT NOT NULL,
-                        PRIMARY KEY (Id, PlayerName),
-                        FOREIGN KEY (PlayerName, Id) REFERENCES Players(Name, Id)
-                    );
-                ";
-                        command.ExecuteNonQuery();
-                    }
+            //            // Check if the tables already exist
+            //            using (SqlCommand command = new SqlCommand())
+            //            {
+            //                command.Connection = connection;
+            //                command.CommandText = @"
+            //            IF OBJECT_ID('Players', 'U') IS NULL
+            //                CREATE TABLE Players (
+            //                    Name VARCHAR(50) NOT NULL,
+            //                    Id INT NOT NULL,
+            //                    PRIMARY KEY (Name, Id)
+            //                );
+            //            IF OBJECT_ID('Games', 'U') IS NULL
+            //                CREATE TABLE Games (
+            //                    Id INT NOT NULL,
+            //                    PlayerName VARCHAR(50) NOT NULL,
+            //                    StartTime DATETIME NOT NULL,
+            //                    EndTime DATETIME,
+            //                    Size INT NOT NULL,
+            //                    Rank INT NOT NULL,
+            //                    PRIMARY KEY (Id, PlayerName),
+            //                    FOREIGN KEY (PlayerName, Id) REFERENCES Players(Name, Id)
+            //                );
+            //        ";
+            //                command.ExecuteNonQuery();
+            //            }
 
-                    // Insert some data into the tables
-                    using (SqlCommand command = new SqlCommand())
-                    {
-                        command.Connection = connection;
-                        command.CommandText = @"
-                    INSERT INTO Players (Name, Id) VALUES
-                        ('Alice', 1),
-                        ('Bob', 2),
-                        ('Charlie', 3),
-                        ('David', 4),
-                        ('Eve', 5);
-                    INSERT INTO Games (Id, PlayerName, StartTime, EndTime, Size, Rank) VALUES
-                        (1, 'Alice', '2023-04-21 10:00:00', '2023-04-21 10:10:00', 100, 1),
-                        (1, 'Bob', '2023-04-21 10:00:00', '2023-04-21 10:05:00', 80, 2),
-                        (1, 'Charlie', '2023-04-21 10:00:00', '2023-04-21 10:08:00', 90, 3),
-                        (2, 'Alice', '2023-04-22 15:00:00', '2023-04-22 15:20:00', 120, 1),
-                        (2, 'Bob', '2023-04-22 15:00:00', '2023-04-22 15:05:00', 60, 2),
-                        (2, 'David', '2023-04-22 15:00:00', '2023-04-22 15:12:00', 80, 3);
-                ";
-                        command.ExecuteNonQuery();
-                    }
+            //            // Insert some data into the tables
+            //            using (SqlCommand command = new SqlCommand())
+            //            {
+            //                command.Connection = connection;
+            //                command.CommandText = @"
+            //            INSERT INTO Players (Name, Id) VALUES
+            //                ('Alice', 1),
+            //                ('Bob', 2),
+            //                ('Charlie', 3),
+            //                ('David', 4),
+            //                ('Eve', 5);
+            //            INSERT INTO Games (Id, PlayerName, StartTime, EndTime, Size, Rank) VALUES
+            //                (1, 'Alice', '2023-04-21 10:00:00', '2023-04-21 10:10:00', 100, 1),
+            //                (1, 'Bob', '2023-04-21 10:00:00', '2023-04-21 10:05:00', 80, 2),
+            //                (1, 'Charlie', '2023-04-21 10:00:00', '2023-04-21 10:08:00', 90, 3),
+            //                (2, 'Alice', '2023-04-22 15:00:00', '2023-04-22 15:20:00', 120, 1),
+            //                (2, 'Bob', '2023-04-22 15:00:00', '2023-04-22 15:05:00', 60, 2),
+            //                (2, 'David', '2023-04-22 15:00:00', '2023-04-22 15:12:00', 80, 3);
+            //        ";
+            //                command.ExecuteNonQuery();
+            //            }
 
-                    // Close the connection
-                    connection.Close();
-                }
+            //            // Close the connection
+            //            connection.Close();
+            //        }
 
-                // Return a success message
-                return "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\n" +
-                       "Database tables and data have been successfully created.";
-            }
-            catch (Exception ex)
-            {
-                // Return an error message
-                return "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\n\r\n" +
-                       "An error occurred while creating the database tables and data: " + ex.Message;
-            }
+            //        // Return a success message
+            //        return "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\n" +
+            //               "Database tables and data have been successfully created.";
+            //    }
+            //    catch (Exception ex)
+            //    {
+            //        // Return an error message
+            //        return "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\n\r\n" +
+            //               "An error occurred while creating the database tables and data: " + ex.Message;
+            //    }
+
+            // TODO
+            return "";
         }
     }
 }
