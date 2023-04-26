@@ -25,7 +25,6 @@ namespace WebServer
     /// </summary>
     public class WebServer
     {
-
         /* FIELDS */
 
         /// <summary>
@@ -42,7 +41,7 @@ namespace WebServer
         /// <summary>
         ///     The name of a player.
         /// </summary>
-        private static string playerName;
+        private static string playerName = "";
 
         /// <summary>
         ///     Default constructor - sets up the SQL connection.
@@ -132,8 +131,6 @@ Connection: Closed
         /// <returns> A string the represents a web page.</returns>
         private static string BuildHTTPBody()
         {
-            counter++;
-
             return $@"
 <html>
 <head>
@@ -155,7 +152,6 @@ Connection: Closed
         private static string BuildHTTPHighScoresBody()
         {
             // TODO
-            counter++;
 
             //CreateDBTablesPage();
 
@@ -185,18 +181,93 @@ Connection: Closed
         /// <returns> The HTTP response body for retrieving scores for a particular player. </returns>
         private static string BuildHTTPScoreForParticularPlayerBody()
         {
-            // TODO - Check if there is such player whose name is playerName.
-            if (playerName == "")
+            if (DoesPlayerNameExist("Game", playerName))
             {
-                // TODO - using playerName on the field, get a score of the particular player from DB.
+                string body = "";
+
+                // Using playerName on the field, get a score of the particular player from DB.
+                using (SqlConnection connection = new SqlConnection(connectionString))
+                {
+                    // Execute the SQL query using the established connection.
+                    string query = $"SELECT HeartBeat, MAX(Mass) FROM Mass WHERE playerName = '{playerName}'"; // TODO - modify to a high score for each game
+
+                    connection.Open();
+                    SqlCommand command = new SqlCommand(query, connection);
+                    SqlDataReader reader = command.ExecuteReader();
+
+                    StringBuilder bodyBuilder = new StringBuilder();
+                    bodyBuilder.Append("<html>");
+                    bodyBuilder.Append($"<h1>{playerName}'s Scores</h1>");
+                    bodyBuilder.Append("<table>");
+                    bodyBuilder.Append("<tr><th>Time</th><th>High Score</th></tr>");
+
+                    while (reader.Read())
+                    {
+                        int heartbeat = reader.GetInt32(0); // ?
+                        int highScore = reader.GetInt32(1); // ?
+                        bodyBuilder.Append($"<tr><td>{heartbeat}</td><td>{highScore}</td></tr>");
+                    }
+
+                    bodyBuilder.Append("</table>");
+                    bodyBuilder.Append("</html");
+
+                    body = bodyBuilder.ToString();
+                }
+
+                return body;
             }
             else
             {
                 // Return a error body since there is no such a player.
-                BuildHTTPErrorBody();
+                return BuildHTTPErrorBody();
             }
 
-            return "";
+        }
+
+        /// <summary>
+        ///     Constructs the HTML body of a page to display a message 
+        ///     indicating successful insertion of data into the Scores table.
+        /// </summary>
+        /// <returns> the HTML response body for an insert page. </returns>
+        private static string BuildHTTPInsertDataBody()
+        {
+            return $@"
+<html>
+<head>
+<meta charset='UTF-8'>
+<title> Inserted data into the Scores table successfully! </title>
+</head>
+<body>
+<h1> You want to go to the main page? </h1>
+<a href='http://localhost:11001'> Main Page </a>
+</body>
+</html>
+";
+        }
+
+        /// <summary>
+        ///     Checks if a targeting player name exists in the Game table.
+        /// </summary>
+        /// <returns> true if the player name exists in the Game table. </returns>
+        private static bool DoesPlayerNameExist(string tableName, string playerName)
+        {
+            bool playerExists = false;
+
+            using (SqlConnection connection = new SqlConnection(connectionString))
+            {
+                connection.Open();
+                string query = $"SELECT COUNT(*) FROM {tableName} WHERE playerName = '{playerName}'";
+
+                SqlCommand command = new SqlCommand(query, connection);
+                int count = (int)command.ExecuteScalar();
+
+                if (count > 0)
+                {
+                    playerExists = true;
+                }
+            }
+
+            return playerExists;
         }
 
         /// <summary>
@@ -209,7 +280,7 @@ Connection: Closed
 <html>
 <head>
 <meta charset='UTF-8'>
-<title> Created database tables! </title>
+<title> Created database tables successfully! </title>
 </head>
 <body>
 <h1> You want to go to the main page? </h1>
@@ -257,7 +328,7 @@ Connection: Closed
         /// <summary>
         ///     Builds the High Scores page.
         /// </summary>
-        /// <returns> the complete HTTP message for Scores Page </returns>
+        /// <returns> the complete HTTP message for Scores page </returns>
         private static string BuildHighScoresPage()
         {
             return BuildPage(BuildHTTPHighScoresBody());
@@ -272,6 +343,16 @@ Connection: Closed
         private static string BuildScoresForParticularPlayerPage()
         {
             return BuildPage(BuildHTTPScoreForParticularPlayerBody());
+        }
+
+        /// <summary>
+        ///     Builds an HTML web page with a form that allows the user to insert new data
+        ///     into the Scores table of the database.
+        /// </summary>
+        /// <returns> the complete HTTP message for Insert page. </returns>
+        private static string BuildInsertDataPage()
+        {
+            return BuildPage(BuildHTTPInsertDataBody());
         }
 
         /// <summary>
@@ -370,11 +451,9 @@ Connection: Closed
         /// <param name="network_message_state"> provided by the Networking code, contains socket and message</param>
         internal static void OnMessage(Networking channel, string message)
         {
-            // Return an HTML page listing the top score for each player in the database.
-            // "score" means the highest mass achieved by the player.
-
             if (message.Contains("index.html") || message.Contains("/ HTTP") || message.Contains("index")) // Main Page
             {
+                counter++;
                 SendResponseMessage(BuildMainPage(), channel);
             }
             else if (message.Contains("favicon"))   // Do nothing.
@@ -402,23 +481,55 @@ Connection: Closed
             }
             else if (message.Contains("scores/")) // Insert into Database Endpoint
             {
-                var (name, highmass, highrank, starttime, endtime) = ParseInformationOfPlayer(message);
-                
-                // TODO - insert the above data into the DB.
+                var (playerName, highMass, highRank, startTime, endTime) = ParseInformationOfPlayer(message);
+
+                // TODO - "Starttime and endtime should be in milliseconds since the start of the Unix epic."
+
+                try
+                {
+                    bool playerExists = DoesPlayerNameExist("Scores", playerName);
+
+                    // Check if player exists in the database.
+                    using (SqlConnection connection = new SqlConnection(connectionString))
+                    {
+                        string query;
+
+                        if (playerExists)
+                        {
+                            // Player exists, update their data.
+                            query = $"UPDATE Scores SET highMass = '{highMass}', highRank = '{highRank}', startTime = '{startTime}', endTime = '{endTime}' WHERE playerName = '{playerName}'";
+                        }
+                        else
+                        {
+                            // Player does not exist, insert new data.
+                            query = $"INSERT INTO Scores (playerName, highMass, highRank, startTime, endTime) VALUES ('{playerName}', '{highMass}', '{highRank}', '{startTime}', '{endTime}')";
+                        }
+
+                        // Execute the SQL query
+                        SqlCommand command = new SqlCommand(query, connection);
+                        connection.Open();
+                        command.ExecuteNonQuery();
+                    }
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine($"Error occured when inserting data: {e.Message}");
+                }
+
+                SendResponseMessage(BuildInsertDataPage(), channel);
             }
-            else if (message.Contains("create"))
+            else if (message.Contains("create")) // Create
             {
                 CreateTablesOrDoNothing(channel);
 
-                // TODO - Seed some dummy data
+                SeedDummyData();
 
                 SendResponseMessage(BuildCreatePage(), channel);
             }
             else if (message.Contains("fancy")) // Fancy Page
             {
-                // OPTIONAL
-                // A pretty HTML table with the data.
-                // TODO - make sure to include this in your README.
+                // OPTIONAL - A pretty HTML table with the data.
+                // Make sure to include this in your README.
             }
             else // Any other links that we do not support
             {
@@ -432,33 +543,49 @@ Connection: Closed
         }
 
         /// <summary>
-        /// 
+        ///     Checks if the required database tables exist,
+        ///     creates them if they don't.
         /// </summary>
-        /// <param name="channel"></param>
+        /// <param name="channel"> the networking channel to use for sending the response. </param>
         private static void CreateTablesOrDoNothing(Networking channel)
         {
-            // if not, create new DB tables..
-            using (var connection = new SqlConnection(connectionString))
+            try
             {
-                connection.Open();
-
-                // Check if the DB tables already exist..
-                string query = "IF (EXISTS (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Table1' OR TABLE_NAME = 'Table2'";
-                SqlCommand command = new SqlCommand(query, connection);
-
-                int tableCount = (int)command.ExecuteScalar();
-
-                if (tableCount == 6) // If all tables exist, do nothing.
+                using (var connection = new SqlConnection(connectionString))
                 {
-                    Console.WriteLine("Tables already exist.");
-                }
-                else // If not, create new DB tables.
-                {
-                    // TODO - call the create new DB table function.
+                    connection.Open();
 
-                    Console.WriteLine("Created new DB tables just now.");
+                    // Check if the DB tables already exist.. ERROR - TODO
+                    string query = "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Table1' OR TABLE_NAME = 'Table2'";
+                    SqlCommand command = new SqlCommand(query, connection);
+
+                    int tableCount = (int)command.ExecuteScalar();
+
+                    if (tableCount == 6) // If all tables exist, do nothing.
+                    {
+                        Console.WriteLine("Tables already exist.");
+                    }
+                    else // If not, create new DB tables.
+                    {
+                        CreateDBTablesPage();
+
+                        Console.WriteLine("Created new DB tables just now.");
+                    }
                 }
             }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Error occured: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        ///     Inserts some dummy data into the tables
+        ///     for testing purposes.
+        /// </summary>
+        private static void SeedDummyData()
+        {
+            // TODO
         }
 
         /// <summary>
@@ -486,7 +613,7 @@ Connection: Closed
         /// </summary>
         /// <param name="message"> A request message from a webpage. </param>
         /// <returns></returns>
-        private static (string name, string highmass, string highrank, string starttime, string endtime) 
+        private static (string playerName, string highMass, string highRank, string startTime, string endTime)
                         ParseInformationOfPlayer(string message)
         {
             string pattern = @"scores\/([^\/]*)\/([^\/]*)\/([^\/]*)\/([^\/]*)\/([^\/]*)";
@@ -494,15 +621,15 @@ Connection: Closed
 
             if (match.Success)
             {
-                string name = match.Groups[1].Value;
-                string highmass = match.Groups[2].Value;
-                string highrank = match.Groups[3].Value;
-                string starttime = match.Groups[4].Value;
-                string endtime = match.Groups[5].Value;
-                Console.WriteLine($"Name: {name}\nHighmass: {highmass}\nHighrank: {highrank}\nStarttime: {starttime}\nEndtime: {endtime}");
-                
-                return (name, highmass, highrank, starttime, endtime);
-            } 
+                string playerName = match.Groups[1].Value;
+                string highMass = match.Groups[2].Value;
+                string highRank = match.Groups[3].Value;
+                string startTime = match.Groups[4].Value;
+                string endTime = match.Groups[5].Value;
+                Console.WriteLine($"Name: {playerName}\nHighmass: {highMass}\nHighrank: {highRank}\nStarttime: {startTime}\nEndtime: {endTime}");
+
+                return (playerName, highMass, highRank, startTime, endTime);
+            }
             else
             {
                 Console.WriteLine("No match found.");
@@ -539,34 +666,6 @@ Connection: Closed
         /* SQL */
 
         /// <summary>
-        ///     Try to add a row to the database table
-        ///     
-        /// </summary>
-        private static void AddClients()
-        {
-            //    Console.WriteLine("Can we add a row?");
-            //    try
-            //    {
-            //        using SqlConnection con = new SqlConnection(connectionString);
-
-            //        con.Open();
-
-            //        using SqlCommand command = new SqlCommand("TODO");
-            //        using SqlDataReader reader = command.ExecuteReader();
-
-            //        while (reader.Read())
-            //        {
-            //            Console.WriteLine("{0} {1}",
-            //                reader.GetInt32(0), reader.GetString(1));
-            //        }
-            //    }
-            //    catch (SqlException exception)
-            //    {
-            //        Console.WriteLine($"Error in SQL connection:\n   - {exception.Message}");
-            //    }
-        }
-
-        /// <summary>
         /// Handle some CSS to make our pages beautiful
         /// </summary>
         /// <returns>HTTP Response Header with CSS file contents added</returns>
@@ -588,7 +687,12 @@ Connection: Closed
                 connection.Open();
 
                 // Query the Players table for all rows
-                string query = "SELECT * FROM Players";
+                string query = "SELECT Game.gameID, Game.playerName, Game.endTime, Mass.Mass" +
+                    "FROM Game g" +
+                    "JOIN Mass m ON g.gameID = m.gameID" +
+                    "JOIN Player p ON p.playerName = g.playerName" +
+                    "WHERE p.playerName = 'given_name'" +
+                    "ORDER BY g.gameID;";
                 using (SqlCommand command = new SqlCommand(query, connection))
                 {
                     using (SqlDataReader reader = command.ExecuteReader())
@@ -622,78 +726,118 @@ Connection: Closed
         /// <returns> the HTTP message header followed by some informative information</returns>
         private static string CreateDBTablesPage()
         {
-            //    try
-            //    {
-            //        // Connect to the database
-            //        using (SqlConnection connection = new SqlConnection(connectionString))
-            //        {
-            //            connection.Open();
-
-            //            // Check if the tables already exist
-            //            using (SqlCommand command = new SqlCommand())
-            //            {
-            //                command.Connection = connection;
-            //                command.CommandText = @"
-            //            IF OBJECT_ID('Players', 'U') IS NULL
-            //                CREATE TABLE Players (
-            //                    Name VARCHAR(50) NOT NULL,
-            //                    Id INT NOT NULL,
-            //                    PRIMARY KEY (Name, Id)
-            //                );
-            //            IF OBJECT_ID('Games', 'U') IS NULL
-            //                CREATE TABLE Games (
-            //                    Id INT NOT NULL,
-            //                    PlayerName VARCHAR(50) NOT NULL,
-            //                    StartTime DATETIME NOT NULL,
-            //                    EndTime DATETIME,
-            //                    Size INT NOT NULL,
-            //                    Rank INT NOT NULL,
-            //                    PRIMARY KEY (Id, PlayerName),
-            //                    FOREIGN KEY (PlayerName, Id) REFERENCES Players(Name, Id)
-            //                );
-            //        ";
-            //                command.ExecuteNonQuery();
-            //            }
-
-            //            // Insert some data into the tables
-            //            using (SqlCommand command = new SqlCommand())
-            //            {
-            //                command.Connection = connection;
-            //                command.CommandText = @"
-            //            INSERT INTO Players (Name, Id) VALUES
-            //                ('Alice', 1),
-            //                ('Bob', 2),
-            //                ('Charlie', 3),
-            //                ('David', 4),
-            //                ('Eve', 5);
-            //            INSERT INTO Games (Id, PlayerName, StartTime, EndTime, Size, Rank) VALUES
-            //                (1, 'Alice', '2023-04-21 10:00:00', '2023-04-21 10:10:00', 100, 1),
-            //                (1, 'Bob', '2023-04-21 10:00:00', '2023-04-21 10:05:00', 80, 2),
-            //                (1, 'Charlie', '2023-04-21 10:00:00', '2023-04-21 10:08:00', 90, 3),
-            //                (2, 'Alice', '2023-04-22 15:00:00', '2023-04-22 15:20:00', 120, 1),
-            //                (2, 'Bob', '2023-04-22 15:00:00', '2023-04-22 15:05:00', 60, 2),
-            //                (2, 'David', '2023-04-22 15:00:00', '2023-04-22 15:12:00', 80, 3);
-            //        ";
-            //                command.ExecuteNonQuery();
-            //            }
-
-            //            // Close the connection
-            //            connection.Close();
-            //        }
-
-            //        // Return a success message
-            //        return "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\n" +
-            //               "Database tables and data have been successfully created.";
-            //    }
-            //    catch (Exception ex)
-            //    {
-            //        // Return an error message
-            //        return "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\n\r\n" +
-            //               "An error occurred while creating the database tables and data: " + ex.Message;
-            //    }
-
-            // TODO
+            CreateTableGame();
+            CreateTableHeartbeat();
+            CreateTableLeaderboard();
+            CreateTableMass();
+            CreateTablePlayer();
+            CreateTableTime();
             return "";
+        }
+
+        /// <summary>
+        ///     Creates the "Game" table in the database.
+        /// </summary>
+        private static void CreateTableGame()
+        {
+            string query = @"
+            CREATE TABLE Game (
+                playerID INT NOT NULL,
+                playerName VARCHAR(50) NOT NULL,
+                endTime DATETIME NOT NULL,
+                gameID INT PRIMARY KEY NOT NULL
+            )";
+
+            CreateTable(query);
+        }
+
+        /// <summary>
+        ///     Creates the "Heartbeat" table in the database.
+        /// </summary>
+        private static void CreateTableHeartbeat()
+        {
+            string query = @"
+            CREATE TABLE Heartbeat (
+                HeartBeat INT NOT NULL,
+                playerID INT NOT NULL,
+                playerName VARCHAR(50) NOT NULL,
+                gameID INT NOT NULL
+            )";
+            CreateTable(query);
+        }
+
+        /// <summary>
+        ///     Creates the "Leaderboard" table in the database.
+        /// </summary>
+        private static void CreateTableLeaderboard()
+        {
+            string query = @"
+            CREATE TABLE LeaderBoard (
+                Rank INT NOT NULL,
+                playerName VARCHAR(50) NOT NULL,
+                playerID INT NOT NULL,
+                score INT NOT NULL,
+                gameID INT NOT NULL
+            )";
+            CreateTable(query);
+        }
+
+
+        /// <summary>
+        ///     Creates the "Mass" table in the database.
+        /// </summary>
+        private static void CreateTableMass()
+        {
+            string query = @"
+            CREATE TABLE LeaderBoard (
+                Mass INT NOT NULL,
+                playerID INT NOT NULL,
+                gameID INT NOT NULL
+            )";
+            CreateTable(query);
+        }
+
+        /// <summary>
+        ///     Creates the "Player" table in the database.
+        /// </summary>
+        private static void CreateTablePlayer()
+        {
+            string query = @"
+            CREATE TABLE Player (
+                playerID INT NOT NULL,
+                playerName VARCHAR(50) NOT NULL
+            )";
+            CreateTable(query);
+        }
+
+        /// <summary>
+        ///     Creates the "Time" table in the database.
+        /// </summary>
+        private static void CreateTableTime()
+        {
+            string query = @"
+            CREATE TABLE LeaderBoard (
+                startTime DATETIME NOT NULL,
+                playerID INT NOT NULL,
+                playerName VARCHAR(50) NOT NULL,
+                gameID INT NOT NULL
+            )";
+            CreateTable(query);
+        }
+
+        /// <summary>
+        ///     Helper method to create a table in SSMS.
+        /// </summary>
+        /// <param name="query"> a query for creating a specific table. </param>
+        private static void CreateTable(string query)
+        {
+            using (SqlConnection connection = new SqlConnection(connectionString))
+            {
+                connection.Open();
+
+                SqlCommand command = new SqlCommand(query, connection);
+                command.ExecuteNonQuery();
+            }
         }
     }
 }
