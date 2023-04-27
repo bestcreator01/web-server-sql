@@ -199,6 +199,7 @@ Connection: Closed
             SELECT LeaderBoard.gameID, LeaderBoard.playerID, Player.playerName, LeaderBoard.Rank, LeaderBoard.Mass
             FROM LeaderBoard
             INNER JOIN Player ON LeaderBoard.playerID = Player.playerID
+            ORDER BY Rank ASC
             ";
 
             using SqlCommand command = new SqlCommand(query, connection);
@@ -248,10 +249,11 @@ Connection: Closed
                 {
                     // Execute the SQL tableQuery using the established connection.
                     string query = @$"
-                    SELECT LeaderBoard.gameID, LeaderBoard.playerID, Player.playerName, LeaderBoard.Rank, LeaderBoard.Mass, HeartBeat.heartbeat
+                    SELECT HeartBeat.heartbeat, LeaderBoard.Mass
                     FROM LeaderBoard 
-                    INNER JOIN LeaderBoard.playerID = Player.playerID
-                    INNER JOIN LeaderBoard.playerID = HeartBeat.playerID
+                    INNER JOIN Player ON LeaderBoard.playerID = Player.playerID
+                    INNER JOIN HeartBeat ON LeaderBoard.playerID = HeartBeat.playerID
+                    WHERE Player.playerName = '{playerName}'
                     ";
 
                     connection.Open();
@@ -262,25 +264,17 @@ Connection: Closed
                     bodyBuilder.Append("<html>");
                     bodyBuilder.Append($"<h1>{playerName}'s Scores</h1>");
                     bodyBuilder.Append("<table>");
-                    bodyBuilder.Append("<tr><th>Time</th><th>High Score</th></tr>");
+                    bodyBuilder.Append("<tr><th>Duration</th><th>High Score</th></tr>");
 
+                    // Create html request based on the received data.
                     while (reader.Read())
                     {
-                        int gameID = reader.GetInt32(0);
-                        int playerID = reader.GetInt32(1);
-                        string playerName = reader.GetString(2);
-                        int rank = reader.GetInt32(3);
-                        int mass = reader.GetInt32(4);
-                        int heartbeat = reader.GetInt32(5);
+                        int heartbeat = reader.GetInt32(0);
+                        int highscore = reader.GetInt32(1);
 
                         bodyBuilder.Append("<tr>");
-                        bodyBuilder.Append($"<td>{gameID}</td>");
-                        bodyBuilder.Append($"<td>{playerID}</td>");
-                        bodyBuilder.Append($"<td>{playerName}</td>");
-                        bodyBuilder.Append($"<td>{rank}</td>");
-                        bodyBuilder.Append($"<td>{mass}</td>");
                         bodyBuilder.Append($"<td>{heartbeat}</td>");
-
+                        bodyBuilder.Append($"<td>{highscore}</td>");
                         bodyBuilder.Append("</tr>");
                     }
 
@@ -310,10 +304,10 @@ Connection: Closed
 <html>
 <head>
 <meta charset='UTF-8'>
-<title> Inserted data into the Scores table successfully! </title>
+<title> inserted </title>
 </head>
 <body>
-<h1> You want to go to the main page? </h1>
+<h1> Inserted data into the Scores table successfully! </h1>
 <a href='http://localhost:11001'> Main Page </a>
 </body>
 </html>
@@ -388,7 +382,7 @@ Connection: Closed
 <h1>SUPER FANCY WEBPAGE</h1>
 <p></p>
 <details>
-<summary>Open Me</summary>
+<summary><b>Open Me</b></summary>
 <p>{leaderboard}</p>
 </details>
 <p></p>
@@ -571,6 +565,10 @@ Connection: Closed
         /// <param name="network_message_state"> provided by the Networking code, contains socket and message</param>
         internal static void OnMessage(Networking channel, string message)
         {
+            string pattern = @"scores\/([^\/]*)\/([^\/]*)\/([^\/]*)\/([^\/]*)\/([^\/]*)";
+            Match match = Regex.Match(message, pattern);
+
+
             if (message.Contains("index.html") || message.Contains("/ HTTP") || message.Contains("index")) // Main Page
             {
                 SendResponseMessage(BuildMainPage(), channel);
@@ -583,57 +581,62 @@ Connection: Closed
             {
                 SendResponseMessage(BuildHighScoresPage(), channel);
             }
-            else if (message.Contains("scores")) // Scores for Particular Player Page
+            else if (message.Contains("scores"))
             {
-                playerName = ParsePlayerName(message);
-
-                // Check if the name is contained in message.
-                if (message.Contains(playerName))
+                if (match.Success) // Insert into Database Endpoint
                 {
-                    SendResponseMessage(BuildScoresForParticularPlayerPage(), channel);
-                }
-                else
-                {
-                    // Show a message that there is no player whose name is playerName.
-                    SendResponseMessage(BuildErrorPage(), channel);
-                }
-            }
-            else if (message.Contains("scores/")) // Insert into Database Endpoint
-            {
-                var (playerName, highMass, highRank, startTime, endTime) = ParseInformationOfPlayer(message);
+                    var (playerName, highMass, highRank, startTime, endTime) = ParseInformationOfPlayer(message);
 
-                // TODO - "Starttime and endtime should be in milliseconds since the start of the Unix epic."
-
-                try
-                {
-                    bool playerExists = DoesPlayerNameExist("Scores", playerName);
-
-                    // Check if player exists in the database.
-                    using SqlConnection connection = new SqlConnection(connectionString);
-                    string query;
-
-                    if (playerExists)
+                    try
                     {
-                        // Player exists, update their data.
-                        query = $"UPDATE Scores SET highMass = '{highMass}', highRank = '{highRank}', startTime = '{startTime}', endTime = '{endTime}' WHERE playerName = '{playerName}'";
+                        bool playerExists = DoesPlayerNameExist("LeaderBoard", playerName);
+
+                        // Check if player exists in the database.
+                        using SqlConnection connection = new SqlConnection(connectionString);
+                        string query;
+
+                        if (playerExists)
+                        {
+                            // Player exists, update their data.
+                            query = $"UPDATE LeaderBoard SET playerName = '{playerName}', Mass = {highMass}, Rank = {highRank}" +
+                                    $"UPDATE Time SET startTime = {startTime}" +
+                                    $"UPDATE Game SET endTime = {endTime}";
+                        }
+                        else
+                        {
+                            // Player does not exist, insert new data.
+                            query = $"INSERT INTO LeaderBoard (playerName, Mass, Rank) VALUES ('{playerName}', {highMass}, {highRank})" +
+                                    $"INSERT INTO Time (startTime) VALUES ({startTime})" +
+                                    $"INSERT INTO Game (endTime) Values ({endTime})";
+                        }
+
+                        // Execute the SQL tableQuery
+                        using SqlCommand command = new SqlCommand(query, connection);
+                        connection.Open();
+                        command.ExecuteNonQuery();
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine($"Error occured when inserting data: {e.Message}");
+                    }
+
+                    SendResponseMessage(BuildInsertDataPage(), channel);
+                }
+                else // Scores for Particular Player Page
+                {
+                    playerName = ParsePlayerName(message);
+
+                    // Check if the name is contained in message.
+                    if (message.Contains(playerName))
+                    {
+                        SendResponseMessage(BuildScoresForParticularPlayerPage(), channel);
                     }
                     else
                     {
-                        // Player does not exist, insert new data.
-                        query = $"INSERT INTO Scores (playerName, highMass, highRank, startTime, endTime) VALUES ('{playerName}', '{highMass}', '{highRank}', '{startTime}', '{endTime}')";
+                        // Show a message that there is no player whose name is playerName.
+                        SendResponseMessage(BuildErrorPage(), channel);
                     }
-
-                    // Execute the SQL tableQuery
-                    using SqlCommand command = new SqlCommand(query, connection);
-                    connection.Open();
-                    command.ExecuteNonQuery();
                 }
-                catch (Exception e)
-                {
-                    Console.WriteLine($"Error occured when inserting data: {e.Message}");
-                }
-
-                SendResponseMessage(BuildInsertDataPage(), channel);
             }
             else if (message.Contains("create")) // Create
             {
@@ -703,7 +706,7 @@ Connection: Closed
         {
             // Get the name followed by "scores/"
             string playerName = "";
-            string pattern = @"\/scores/\/\w+";
+            string pattern = @"\/scores\/(\w+)";
 
             Match match = Regex.Match(message, pattern);
             if (match.Success)
@@ -785,9 +788,11 @@ p { color: Black; text-align: center;}
         }
 
         /// <summary>
-        ///     TODO
+        ///     Sends a CSS (Cascading Style Sheets) response that defines the style
+        ///     for HTML elements in a web page, including the background color,
+        ///     font color, and alignment of the body, and the styling of a table.
         /// </summary>
-        /// <returns></returns>
+        /// <returns> A string value that represents the CSS code. </returns>
         private static string SendCSSResponseTable()
         {
             return @"
@@ -825,13 +830,13 @@ table, th, td {border: 1px solid;}
                 gameID INT PRIMARY KEY NOT NULL,
                 playerID INT NOT NULL,
                 playerName VARCHAR(50) NOT NULL,
-                endTime DATETIME NOT NULL
+                endTime INT NOT NULL
             )";
 
             string dataQuery1 = "INSERT INTO Game (gameID, playerID, playerName, endTime) VALUES (1, 1, 'Jim', 1682010843268)";
-            string dataQuery2 = "INSERT INTO Game (gameID, playerID, playerName, endTime) VALUES (1, 2, 'Gloria', 1682010843269)";            
+            string dataQuery2 = "INSERT INTO Game (gameID, playerID, playerName, endTime) VALUES (1, 2, 'Gloria', 1682010843269)";
             string dataQuery3 = "INSERT INTO Game (gameID, playerID, playerName, endTime) VALUES (1, 3, 'Seoin', 1682010843270)";
-            string dataQuery4 = "INSERT INTO Game (gameID, playerID, playerName, endTime) VALUES (1, 4, 'Genius', 1682010843271)";            
+            string dataQuery4 = "INSERT INTO Game (gameID, playerID, playerName, endTime) VALUES (1, 4, 'Genius', 1682010843271)";
             string dataQuery5 = "INSERT INTO Game (gameID, playerID, playerName, endTime) VALUES (1, 5, 'Girls', 1682010843272)";
 
             Console.WriteLine("Creating the Game table..");
@@ -853,7 +858,7 @@ table, th, td {border: 1px solid;}
             )";
 
             string dataQuery1 = "INSERT INTO Heartbeat (playerID, heartbeat) VALUES (1, 100)";
-            string dataQuery2 = "INSERT INTO Heartbeat (playerID, heartbeat) VALUES (2, 90)";            
+            string dataQuery2 = "INSERT INTO Heartbeat (playerID, heartbeat) VALUES (2, 90)";
             string dataQuery3 = "INSERT INTO Heartbeat (playerID, heartbeat) VALUES (3, 80)";
             string dataQuery4 = "INSERT INTO Heartbeat (playerID, heartbeat) VALUES (4, 70)";
             string dataQuery5 = "INSERT INTO Heartbeat (playerID, heartbeat) VALUES (5, 60)";
@@ -951,7 +956,7 @@ table, th, td {border: 1px solid;}
             CREATE TABLE Time (
                 gameID INT NOT NULL,
                 playerID INT NOT NULL,
-                startTime DATETIME NOT NULL
+                startTime INT NOT NULL
             )";
 
             string dataQuery1 = "INSERT INTO Time (gameID, playerID, startTime) VALUES (1, 1, 1682010830733)";
