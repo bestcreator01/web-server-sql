@@ -4,6 +4,7 @@ Date:		19-Apr-2023
 Course:		CS 3500, University of Utah, School of Computing
 GitHub ID:	bestcreator01, seointhenerd
 Repo:		https://github.com/uofu-cs3500-spring23/assignment-nine---web-server---sql-heavyeyebagsmadeby3500
+Commit #:	32
 Solution:	WebServer
 Copyright:	CS 3500, Gloria Shin, and Seoin Kim - This work may not be copied for use
 in Academic Coursework.
@@ -11,26 +12,52 @@ in Academic Coursework.
 
 # Overview of the WebServer functionality
 
-	
-# Commit Number
-	
-	1. Assignment Nine - 7 commits
+	This program allows anyone to use their web browser to see information about how players
+	are doing when playing Agario on our client. 
+
+	Necessary data received by the client is inserted to the SQL database server inside the
+	Agario client project. 
+
+	This is the following link of the Agario Client: https://github.com/uofu-cs3500-spring23/assignment8agario-northkoreannotsouth.git
 
 # Time Expenditures:
 
 	1. Assignment Nine - WebServer
 		Predicted Hours:	15
-		Actual Hours:		7
+		Actual Hours:		15
 
-		Note:
+	Note: Our time estimates are getting better than before. We speculated the exact time for this assignment.
 
 # Database Table Summary
 
-	TODO
+	We created 6 tables: Game, Player, Mass, Time, LeaderBoard, HeartBeat
+
+	Game - gameID, playerID, playerName, endTime
+	Player - playerID, playerName
+	Mass - gameID, playerID, Mass
+	Heartbeat - playerID, heartbeat
+	LeaderBoard - gameID, playerID, playerName, Rank, Mass
+
+	All tables have the gameID, which is set in the Game table.
+	Each table contains playerID so that they can be joined or merged in necessary situations.
+	Contents of the LeaderBoard is based on these tables: Game, Player, and Mass. The rank
+	is updated every time a new data is inserted.
+
+	Non-standard pieces of data would be the heartbeat and start time just to let
+	the clients know how long they survived and when they started the game.
 
 # Extent of work
 
-	TODO
+	1) Our web server has the ability to serve as a web server and return a basic welcome page.
+	2) Our web server has the ability to return a web page with a chart of highscores,
+	   more specifically scores with the players' rank.
+	3) Our web server has the ability to take in a request to store a highscore.
+	4) Our web server has the ability to return a web page showing a chart of scores(leaderboard)
+	   and it also may display some random fun images in the fancy webpage.
+	5) Our client code has the ability to contact the database and store information therein.
+
+	Note: In terms of returning the scores of each player (ex. scores/Gloria) this returns the duration(heartbeat)
+		  instead of date time.
 
 # Evaluation on Time Expenditures
 
@@ -71,11 +98,14 @@ in Academic Coursework.
 
 # Branching
 
+	1. Assignment Nine - 32 commits
+
 	We worked on the project together, hence just used the main branch.
 
 # Testing
 	
-	We did not do the testing with a MS test, but debugged with logger.
+	We did not do the testing with a MS test, but debugged manually through looking at the database and our web server.
+	Console.WriteLine also helped a lot in terms of testing.
 
 # Partnership
 
