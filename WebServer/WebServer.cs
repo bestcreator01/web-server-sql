@@ -79,7 +79,6 @@ namespace WebServer
             Console.ReadLine();
         }
 
-
         /* HEADER */
 
         /// <summary>
@@ -131,15 +130,28 @@ Connection: Closed
         /// <returns> A string the represents a web page.</returns>
         private static string BuildHTTPBody()
         {
+            counter++;
+
             return $@"
 <html>
 <head>
 <meta charset='UTF-8'>
-<title>My Web Page</title>
+<title>Main Page</title>
+<style>
+{SendCSSResponse()}
+</style>
+<link rel='stylesheet' href='cssfile.css' type='text/css'>
 </head>
 <body>
 <h1>My {counter} Times Heading</h1>
-<p>I am Seoin and Gloria is next to me. How are you?</p>
+<h1>This is the Main Page!</h1>
+<p>How are you doing? Below are the links for our web pages.</p>
+<a href='http://localhost:11001'> <b>Main Page</b> </a>
+<p></p>
+<a href='http://localhost:11001/highscores'> <b>The top score for each player.</b> </a>
+<p><b>High score for each game played by a player?</b> Type 'localhost:11001/scores/[nameOfThePlayer]'.</p>
+<p><b>Build tables and seed data in them?</b> Type 'localhost:11001/create'.</p>
+<p><b>Insert data into the Database?</b> Type 'localhost:11001/scores/[name]/[highmass]/[highrank]/[starttime]/[endtime]'.</p>
 </body>
 </html>
 ";
@@ -151,31 +163,77 @@ Connection: Closed
         /// <returns> The body of the HTTP response containing the high scores. </returns>
         private static string BuildHTTPHighScoresBody()
         {
-            // TODO
-
-            //CreateDBTablesPage();
-
-            string playersTable = BuildPlayersTable();
+            string highscoreTable = BuildHTTPHighScoreTable();
 
             return $@"
 <html>
 <head>
 <meta charset='UTF-8'>
-<title>My Web Page</title>
+<title>High Scores</title>
+<style>
+{SendCSSResponseTable()}
+</style>
+<link rel='stylesheet' href='cssfile.css' type='text/css'>
 </head>
 <body>
-<h1>My {counter} Times Heading</h1>
-<p>I am Seoin and Gloria is next to me. I'm Good.</p>
-
-{playersTable}
-
+<h1>High Scores Board</h1>
+<p></p>
+{highscoreTable}
 </body>
 </html>
 ";
         }
 
         /// <summary>
-        ///     Builds the HTTP response body for retrieveing scores for a 
+        ///     Builds the HTTP string for retrieving a high score for each player.
+        /// </summary>
+        /// <returns> the HTTP string of a high score for each player. </returns>
+        private static string BuildHTTPHighScoreTable()
+        {
+            // Connect to the database
+            using SqlConnection connection = new SqlConnection(connectionString);
+            connection.Open();
+
+            // Query the Players table for all rows
+            string query = @"
+            SELECT LeaderBoard.gameID, LeaderBoard.playerID, Player.playerName, LeaderBoard.Rank, LeaderBoard.Mass
+            FROM LeaderBoard
+            INNER JOIN Player ON LeaderBoard.playerID = Player.playerID
+            ";
+
+            using SqlCommand command = new SqlCommand(query, connection);
+            using SqlDataReader reader = command.ExecuteReader();
+
+            // Create an HTML table to display the results
+            StringBuilder html = new StringBuilder();
+            html.Append("<table>");
+            html.Append("<tr><th>GameID</th><th>PlayerID</th><th>PlayerName</th><th>Rank</th><th>Mass</th></tr>");
+
+            // Loop through the rows and add them to the table
+            while (reader.Read())
+            {
+                int gameID = reader.GetInt32(0);
+                int playerID = reader.GetInt32(1);
+                string playerName = reader.GetString(2);
+                int rank = reader.GetInt32(3);
+                int mass = reader.GetInt32(4);
+
+                html.Append("<tr>");
+                html.Append($"<td>{gameID}</td>");
+                html.Append($"<td>{playerID}</td>");
+                html.Append($"<td>{playerName}</td>");
+                html.Append($"<td>{rank}</td>");
+                html.Append($"<td>{mass}</td>");
+                html.Append("</tr>");
+            }
+
+            html.Append("</table>");
+
+            return html.ToString();
+        }
+
+        /// <summary>
+        ///     Builds the HTTP response body for retrieving scores for a 
         ///     a particular player.
         /// </summary>
         /// <returns> The HTTP response body for retrieving scores for a particular player. </returns>
@@ -188,12 +246,17 @@ Connection: Closed
                 // Using playerName on the field, get a score of the particular player from DB.
                 using (SqlConnection connection = new SqlConnection(connectionString))
                 {
-                    // Execute the SQL query using the established connection.
-                    string query = $"SELECT HeartBeat, MAX(Mass) FROM Mass WHERE playerName = '{playerName}'"; // TODO - modify to a high score for each game
+                    // Execute the SQL tableQuery using the established connection.
+                    string query = @$"
+                    SELECT LeaderBoard.gameID, LeaderBoard.playerID, Player.playerName, LeaderBoard.Rank, LeaderBoard.Mass, HeartBeat.heartbeat
+                    FROM LeaderBoard 
+                    INNER JOIN LeaderBoard.playerID = Player.playerID
+                    INNER JOIN LeaderBoard.playerID = HeartBeat.playerID
+                    ";
 
                     connection.Open();
-                    SqlCommand command = new SqlCommand(query, connection);
-                    SqlDataReader reader = command.ExecuteReader();
+                    using SqlCommand command = new SqlCommand(query, connection);
+                    using SqlDataReader reader = command.ExecuteReader();
 
                     StringBuilder bodyBuilder = new StringBuilder();
                     bodyBuilder.Append("<html>");
@@ -203,9 +266,22 @@ Connection: Closed
 
                     while (reader.Read())
                     {
-                        int heartbeat = reader.GetInt32(0); // ?
-                        int highScore = reader.GetInt32(1); // ?
-                        bodyBuilder.Append($"<tr><td>{heartbeat}</td><td>{highScore}</td></tr>");
+                        int gameID = reader.GetInt32(0);
+                        int playerID = reader.GetInt32(1);
+                        string playerName = reader.GetString(2);
+                        int rank = reader.GetInt32(3);
+                        int mass = reader.GetInt32(4);
+                        int heartbeat = reader.GetInt32(5);
+
+                        bodyBuilder.Append("<tr>");
+                        bodyBuilder.Append($"<td>{gameID}</td>");
+                        bodyBuilder.Append($"<td>{playerID}</td>");
+                        bodyBuilder.Append($"<td>{playerName}</td>");
+                        bodyBuilder.Append($"<td>{rank}</td>");
+                        bodyBuilder.Append($"<td>{mass}</td>");
+                        bodyBuilder.Append($"<td>{heartbeat}</td>");
+
+                        bodyBuilder.Append("</tr>");
                     }
 
                     bodyBuilder.Append("</table>");
@@ -221,7 +297,6 @@ Connection: Closed
                 // Return a error body since there is no such a player.
                 return BuildHTTPErrorBody();
             }
-
         }
 
         /// <summary>
@@ -280,11 +355,47 @@ Connection: Closed
 <html>
 <head>
 <meta charset='UTF-8'>
-<title> Created database tables successfully! </title>
+<title> create </title>
 </head>
 <body>
-<h1> You want to go to the main page? </h1>
+<h1> Created database tables successfully! </h1>
+<p> Below is the link for Main Page </p>
 <a href='http://localhost:11001'> Main Page </a>
+</body>
+</html>
+";
+        }
+
+        /// <summary>
+        ///     Builds the HTTP response body for creating a fancy webpage.
+        /// </summary>
+        /// <returns> The HTTP response body for creating a fancy webpage. </returns>
+        private static string BuildHTTPFancyBody()
+        {
+            string leaderboard = BuildHTTPHighScoreTable();
+
+            return $@"
+<html>
+<head>
+<meta charset='UTF-8'>
+<title> fancy </title>
+<style>
+{SendCSSResponse()}
+</style>
+<link rel='stylesheet' href='cssfile.css' type='text/css'>
+</head>
+<body>
+<h1>SUPER FANCY WEBPAGE</h1>
+<p></p>
+<details>
+<summary>Open Me</summary>
+<p>{leaderboard}</p>
+</details>
+<p></p>
+<a href='http://localhost:11001'> Main Page </a>
+<p></p>
+<img src='https://wallpapers.com/images/featured/ppzthb74p3b686b9.jpg' alt='meme1' style='width:580px; height:500px;'>
+<img src='https://ih1.redbubble.net/image.1980770119.1726/pp,840x830-pad,1000x1000,f8f8f8.jpg' alt='mem2' style='width:600px; height:800px;'>
 </body>
 </html>
 ";
@@ -335,7 +446,7 @@ Connection: Closed
         }
 
         /// <summary>
-        ///     Builds the page where you query the DB for all scores associated 
+        ///     Builds the page where you tableQuery the DB for all scores associated 
         ///     with the given name and return an HTML web page with a summary
         ///     of the time and high score for each game played by the player.
         /// </summary>
@@ -363,6 +474,15 @@ Connection: Closed
         private static string BuildCreatePage()
         {
             return BuildPage(BuildHTTPCreateBody());
+        }
+
+        /// <summary>
+        ///     Builds the fancy page with a table.
+        /// </summary>
+        /// <returns> the complete HTTP message for Fancy page </returns>
+        private static string BuildFancyPage()
+        {
+            return BuildPage(BuildHTTPFancyBody());
         }
 
         /// <summary>
@@ -453,12 +573,11 @@ Connection: Closed
         {
             if (message.Contains("index.html") || message.Contains("/ HTTP") || message.Contains("index")) // Main Page
             {
-                counter++;
                 SendResponseMessage(BuildMainPage(), channel);
             }
             else if (message.Contains("favicon"))   // Do nothing.
             {
-
+                return;
             }
             else if (message.Contains("highscores")) // High Scores Page
             {
@@ -490,26 +609,24 @@ Connection: Closed
                     bool playerExists = DoesPlayerNameExist("Scores", playerName);
 
                     // Check if player exists in the database.
-                    using (SqlConnection connection = new SqlConnection(connectionString))
+                    using SqlConnection connection = new SqlConnection(connectionString);
+                    string query;
+
+                    if (playerExists)
                     {
-                        string query;
-
-                        if (playerExists)
-                        {
-                            // Player exists, update their data.
-                            query = $"UPDATE Scores SET highMass = '{highMass}', highRank = '{highRank}', startTime = '{startTime}', endTime = '{endTime}' WHERE playerName = '{playerName}'";
-                        }
-                        else
-                        {
-                            // Player does not exist, insert new data.
-                            query = $"INSERT INTO Scores (playerName, highMass, highRank, startTime, endTime) VALUES ('{playerName}', '{highMass}', '{highRank}', '{startTime}', '{endTime}')";
-                        }
-
-                        // Execute the SQL query
-                        SqlCommand command = new SqlCommand(query, connection);
-                        connection.Open();
-                        command.ExecuteNonQuery();
+                        // Player exists, update their data.
+                        query = $"UPDATE Scores SET highMass = '{highMass}', highRank = '{highRank}', startTime = '{startTime}', endTime = '{endTime}' WHERE playerName = '{playerName}'";
                     }
+                    else
+                    {
+                        // Player does not exist, insert new data.
+                        query = $"INSERT INTO Scores (playerName, highMass, highRank, startTime, endTime) VALUES ('{playerName}', '{highMass}', '{highRank}', '{startTime}', '{endTime}')";
+                    }
+
+                    // Execute the SQL tableQuery
+                    using SqlCommand command = new SqlCommand(query, connection);
+                    connection.Open();
+                    command.ExecuteNonQuery();
                 }
                 catch (Exception e)
                 {
@@ -520,9 +637,7 @@ Connection: Closed
             }
             else if (message.Contains("create")) // Create
             {
-                CreateTablesOrDoNothing(channel);
-
-                SeedDummyData();
+                CreateTablesOrDoNothing();
 
                 SendResponseMessage(BuildCreatePage(), channel);
             }
@@ -530,6 +645,8 @@ Connection: Closed
             {
                 // OPTIONAL - A pretty HTML table with the data.
                 // Make sure to include this in your README.
+
+                SendResponseMessage(BuildFancyPage(), channel);
             }
             else // Any other links that we do not support
             {
@@ -547,45 +664,34 @@ Connection: Closed
         ///     creates them if they don't.
         /// </summary>
         /// <param name="channel"> the networking channel to use for sending the response. </param>
-        private static void CreateTablesOrDoNothing(Networking channel)
+        private static void CreateTablesOrDoNothing()
         {
             try
             {
-                using (var connection = new SqlConnection(connectionString))
+                using var connection = new SqlConnection(connectionString);
+                connection.Open();
+
+                // Check if the DB tables already exist..
+                string query = "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Game' AND TABLE_NAME = 'Heartbeat' AND TABLE_NAME = 'LeaderBoard' AND TABLE_NAME = 'Mass' AND TABLE_NAME = 'Player' AND TABLE_NAME = 'Time'";
+                using SqlCommand command = new SqlCommand(query, connection);
+
+                int tableCount = (int)command.ExecuteScalar();
+
+                if (tableCount == 6) // If all tables exist, do nothing.
                 {
-                    connection.Open();
+                    Console.WriteLine("Tables already exist.");
+                }
+                else // If not, create new DB tables.
+                {
+                    CreateDBTablesPage();
 
-                    // Check if the DB tables already exist.. ERROR - TODO
-                    string query = "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Table1' OR TABLE_NAME = 'Table2'";
-                    SqlCommand command = new SqlCommand(query, connection);
-
-                    int tableCount = (int)command.ExecuteScalar();
-
-                    if (tableCount == 6) // If all tables exist, do nothing.
-                    {
-                        Console.WriteLine("Tables already exist.");
-                    }
-                    else // If not, create new DB tables.
-                    {
-                        CreateDBTablesPage();
-
-                        Console.WriteLine("Created new DB tables just now.");
-                    }
+                    Console.WriteLine("Created new DB tables just now.");
                 }
             }
             catch (Exception e)
             {
                 Console.WriteLine($"Error occured: {e.Message}");
             }
-        }
-
-        /// <summary>
-        ///     Inserts some dummy data into the tables
-        ///     for testing purposes.
-        /// </summary>
-        private static void SeedDummyData()
-        {
-            // TODO
         }
 
         /// <summary>
@@ -614,7 +720,7 @@ Connection: Closed
         /// <param name="message"> A request message from a webpage. </param>
         /// <returns></returns>
         private static (string playerName, string highMass, string highRank, string startTime, string endTime)
-                        ParseInformationOfPlayer(string message)
+                            ParseInformationOfPlayer(string message)
         {
             string pattern = @"scores\/([^\/]*)\/([^\/]*)\/([^\/]*)\/([^\/]*)\/([^\/]*)";
             Match match = Regex.Match(message, pattern);
@@ -671,52 +777,25 @@ Connection: Closed
         /// <returns>HTTP Response Header with CSS file contents added</returns>
         private static string SendCSSResponse()
         {
-            throw new NotSupportedException("read the css file from the solution folder, build an http response, and return this string");
-            //Note: for starters, simply return a static hand written css string from right here (don't do file reading)
+            return @"
+body { background-color: AliceBlue; text-align: center;} 
+h1 { color: HotPink; text-align: center;} 
+p { color: Black; text-align: center;}
+";
         }
 
         /// <summary>
         ///     TODO
         /// </summary>
         /// <returns></returns>
-        private static string BuildPlayersTable()
+        private static string SendCSSResponseTable()
         {
-            // Connect to the database
-            using (SqlConnection connection = new SqlConnection(connectionString))
-            {
-                connection.Open();
-
-                // Query the Players table for all rows
-                string query = "SELECT Game.gameID, Game.playerName, Game.endTime, Mass.Mass" +
-                    "FROM Game g" +
-                    "JOIN Mass m ON g.gameID = m.gameID" +
-                    "JOIN Player p ON p.playerName = g.playerName" +
-                    "WHERE p.playerName = 'given_name'" +
-                    "ORDER BY g.gameID;";
-                using (SqlCommand command = new SqlCommand(query, connection))
-                {
-                    using (SqlDataReader reader = command.ExecuteReader())
-                    {
-                        // Create an HTML table to display the results
-                        StringBuilder html = new StringBuilder();
-                        html.Append("<table>");
-                        html.Append("<tr><th>Name</th><th>Id</th></tr>");
-
-                        // Loop through the rows and add them to the table
-                        while (reader.Read())
-                        {
-                            html.Append("<tr>");
-                            html.Append($"<td>{reader.GetString(0)}</td>");
-                            html.Append($"<td>{reader.GetInt32(1)}</td>");
-                            html.Append("</tr>");
-                        }
-
-                        html.Append("</table>");
-
-                        return html.ToString();
-                    }
-                }
-            }
+            return @"
+body { background-color: AliceBlue; text-align: center;} 
+h1 { color: HotPink; text-align: center;} 
+p { color: Black; text-align: center;}
+table, th, td {border: 1px solid;}
+";
         }
 
         /// <summary>
@@ -726,118 +805,227 @@ Connection: Closed
         /// <returns> the HTTP message header followed by some informative information</returns>
         private static string CreateDBTablesPage()
         {
-            CreateTableGame();
-            CreateTableHeartbeat();
-            CreateTableLeaderboard();
-            CreateTableMass();
-            CreateTablePlayer();
-            CreateTableTime();
+            CreateTableGameAndSeed();
+            CreateTableHeartbeatAndSeed();
+            CreateTableLeaderboardAndSeed();
+            CreateTableMassAndSeed();
+            CreateTablePlayerAndSeed();
+            CreateTableTimeAndSeed();
+
             return "";
         }
 
         /// <summary>
-        ///     Creates the "Game" table in the database.
+        ///     Creates the "Game" table in the database and seeds data in the table.
         /// </summary>
-        private static void CreateTableGame()
+        private static void CreateTableGameAndSeed()
         {
-            string query = @"
+            string tableQuery = @"
             CREATE TABLE Game (
+                gameID INT PRIMARY KEY NOT NULL,
                 playerID INT NOT NULL,
                 playerName VARCHAR(50) NOT NULL,
-                endTime DATETIME NOT NULL,
-                gameID INT PRIMARY KEY NOT NULL
+                endTime DATETIME NOT NULL
             )";
 
-            CreateTable(query);
+            string dataQuery1 = "INSERT INTO Game (gameID, playerID, playerName, endTime) VALUES (1, 1, 'Jim', 1682010843268)";
+            string dataQuery2 = "INSERT INTO Game (gameID, playerID, playerName, endTime) VALUES (1, 2, 'Gloria', 1682010843269)";            
+            string dataQuery3 = "INSERT INTO Game (gameID, playerID, playerName, endTime) VALUES (1, 3, 'Seoin', 1682010843270)";
+            string dataQuery4 = "INSERT INTO Game (gameID, playerID, playerName, endTime) VALUES (1, 4, 'Genius', 1682010843271)";            
+            string dataQuery5 = "INSERT INTO Game (gameID, playerID, playerName, endTime) VALUES (1, 5, 'Girls', 1682010843272)";
+
+            Console.WriteLine("Creating the Game table..");
+            CreateTable(tableQuery);
+
+            Console.WriteLine("Seeding dummy data..");
+            SeedDummyDatas(dataQuery1, dataQuery2, dataQuery3, dataQuery4, dataQuery5);
         }
 
         /// <summary>
-        ///     Creates the "Heartbeat" table in the database.
+        ///     Creates the "Heartbeat" table in the database and seeds data in the table.
         /// </summary>
-        private static void CreateTableHeartbeat()
+        private static void CreateTableHeartbeatAndSeed()
         {
-            string query = @"
+            string tableQuery = @"
             CREATE TABLE Heartbeat (
-                HeartBeat INT NOT NULL,
                 playerID INT NOT NULL,
-                playerName VARCHAR(50) NOT NULL,
-                gameID INT NOT NULL
+                heartbeat INT NOT NULL
             )";
-            CreateTable(query);
+
+            string dataQuery1 = "INSERT INTO Heartbeat (playerID, heartbeat) VALUES (1, 100)";
+            string dataQuery2 = "INSERT INTO Heartbeat (playerID, heartbeat) VALUES (2, 90)";            
+            string dataQuery3 = "INSERT INTO Heartbeat (playerID, heartbeat) VALUES (3, 80)";
+            string dataQuery4 = "INSERT INTO Heartbeat (playerID, heartbeat) VALUES (4, 70)";
+            string dataQuery5 = "INSERT INTO Heartbeat (playerID, heartbeat) VALUES (5, 60)";
+
+            Console.WriteLine("Creating the Heartbeat table..");
+            CreateTable(tableQuery);
+
+            Console.WriteLine("Seeding dummy data..");
+            SeedDummyDatas(dataQuery1, dataQuery2, dataQuery3, dataQuery4, dataQuery5);
         }
 
         /// <summary>
-        ///     Creates the "Leaderboard" table in the database.
+        ///     Creates the "Leaderboard" table in the database and seeds data in the table.
         /// </summary>
-        private static void CreateTableLeaderboard()
+        private static void CreateTableLeaderboardAndSeed()
         {
-            string query = @"
+            string tableQuery = @"
             CREATE TABLE LeaderBoard (
+                gameID INT NOT NULL,
+                playerID INT NOT NULL,
+                playerName VARCHAR(50) NOT NULL,
                 Rank INT NOT NULL,
-                playerName VARCHAR(50) NOT NULL,
-                playerID INT NOT NULL,
-                score INT NOT NULL,
-                gameID INT NOT NULL
+                Mass INT NOT NULL
             )";
-            CreateTable(query);
-        }
 
+            string dataQuery1 = "INSERT INTO Leaderboard (gameID, playerID, playerName, Rank, Mass) VALUES (1, 1, 'Jim', 5, 200)";
+            string dataQuery2 = "INSERT INTO Leaderboard (gameID, playerID, playerName, Rank, Mass) VALUES (1, 2, 'Gloria', 4, 300)";
+            string dataQuery3 = "INSERT INTO Leaderboard (gameID, playerID, playerName, Rank, Mass) VALUES (1, 3, 'Seoin', 3, 400)";
+            string dataQuery4 = "INSERT INTO Leaderboard (gameID, playerID, playerName, Rank, Mass) VALUES (1, 4, 'Genuis', 2, 500)";
+            string dataQuery5 = "INSERT INTO Leaderboard (gameID, playerID, playerName, Rank, Mass) VALUES (1, 5, 'Girls', 1, 600)";
 
-        /// <summary>
-        ///     Creates the "Mass" table in the database.
-        /// </summary>
-        private static void CreateTableMass()
-        {
-            string query = @"
-            CREATE TABLE LeaderBoard (
-                Mass INT NOT NULL,
-                playerID INT NOT NULL,
-                gameID INT NOT NULL
-            )";
-            CreateTable(query);
+            Console.WriteLine("Creating the Leaderboard table..");
+            CreateTable(tableQuery);
+
+            Console.WriteLine("Seeding dummy data..");
+            SeedDummyDatas(dataQuery1, dataQuery2, dataQuery3, dataQuery4, dataQuery5);
         }
 
         /// <summary>
-        ///     Creates the "Player" table in the database.
+        ///     Creates the "Mass" table in the database and seeds data in the table.
         /// </summary>
-        private static void CreateTablePlayer()
+        private static void CreateTableMassAndSeed()
         {
-            string query = @"
+            string tableQuery = @"
+            CREATE TABLE Mass (
+                gameID INT NOT NULL,
+                playerID INT NOT NULL,
+                Mass INT NOT NULL
+            )";
+
+            string dataQuery1 = "INSERT INTO Mass (gameID, playerID, Mass) VALUES (1, 1, 200)";
+            string dataQuery2 = "INSERT INTO Mass (gameID, playerID, Mass) VALUES (1, 2, 300)";
+            string dataQuery3 = "INSERT INTO Mass (gameID, playerID, Mass) VALUES (1, 3, 400)";
+            string dataQuery4 = "INSERT INTO Mass (gameID, playerID, Mass) VALUES (1, 4, 500)";
+            string dataQuery5 = "INSERT INTO Mass (gameID, playerID, Mass) VALUES (1, 5, 600)";
+
+            Console.WriteLine("Creating the Mass table..");
+            CreateTable(tableQuery);
+
+            Console.WriteLine("Seeding dummy data..");
+            SeedDummyDatas(dataQuery1, dataQuery2, dataQuery3, dataQuery4, dataQuery5);
+        }
+
+        /// <summary>
+        ///     Creates the "Player" table in the database and seeds data in the table.
+        /// </summary>
+        private static void CreateTablePlayerAndSeed()
+        {
+            string tableQuery = @"
             CREATE TABLE Player (
                 playerID INT NOT NULL,
                 playerName VARCHAR(50) NOT NULL
             )";
-            CreateTable(query);
+
+            string dataQuery1 = "INSERT INTO Player (playerID, playerName) VALUES (1, 'Jim')";
+            string dataQuery2 = "INSERT INTO Player (playerID, playerName) VALUES (2, 'Gloria')";
+            string dataQuery3 = "INSERT INTO Player (playerID, playerName) VALUES (3, 'Seoin')";
+            string dataQuery4 = "INSERT INTO Player (playerID, playerName) VALUES (4, 'Genius')";
+            string dataQuery5 = "INSERT INTO Player (playerID, playerName) VALUES (5, 'Girls')";
+
+            Console.WriteLine("Creating the Player table..");
+            CreateTable(tableQuery);
+
+            Console.WriteLine("Seeding dummy data..");
+            SeedDummyDatas(dataQuery1, dataQuery2, dataQuery3, dataQuery4, dataQuery5);
         }
 
         /// <summary>
-        ///     Creates the "Time" table in the database.
+        ///     Creates the "Time" table in the database and seeds data in the table.
         /// </summary>
-        private static void CreateTableTime()
+        private static void CreateTableTimeAndSeed()
         {
-            string query = @"
-            CREATE TABLE LeaderBoard (
-                startTime DATETIME NOT NULL,
+
+            string tableQuery = @"
+            CREATE TABLE Time (
+                gameID INT NOT NULL,
                 playerID INT NOT NULL,
-                playerName VARCHAR(50) NOT NULL,
-                gameID INT NOT NULL
+                startTime DATETIME NOT NULL
             )";
-            CreateTable(query);
+
+            string dataQuery1 = "INSERT INTO Time (gameID, playerID, startTime) VALUES (1, 1, 1682010830733)";
+            string dataQuery2 = "INSERT INTO Time (gameID, playerID, startTime) VALUES (1, 2, 1682010830734)";
+            string dataQuery3 = "INSERT INTO Time (gameID, playerID, startTime) VALUES (1, 3, 1682010830735)";
+            string dataQuery4 = "INSERT INTO Time (gameID, playerID, startTime) VALUES (1, 4, 1682010830736)";
+            string dataQuery5 = "INSERT INTO Time (gameID, playerID, startTime) VALUES (1, 5, 1682010830737)";
+
+            Console.WriteLine("Creating the Time table..");
+            CreateTable(tableQuery);
+
+            Console.WriteLine("Seeding dummy data..");
+            SeedDummyDatas(dataQuery1, dataQuery2, dataQuery3, dataQuery4, dataQuery5);
         }
 
         /// <summary>
         ///     Helper method to create a table in SSMS.
         /// </summary>
-        /// <param name="query"> a query for creating a specific table. </param>
+        /// <param name="query"> a tableQuery for creating a specific table. </param>
         private static void CreateTable(string query)
         {
-            using (SqlConnection connection = new SqlConnection(connectionString))
+            try
             {
+                using SqlConnection connection = new SqlConnection(connectionString);
                 connection.Open();
 
-                SqlCommand command = new SqlCommand(query, connection);
+                using SqlCommand command = new SqlCommand(query, connection);
                 command.ExecuteNonQuery();
+
+                Console.WriteLine("Successfully created the table!");
             }
+            catch (SqlException e)
+            {
+                Console.WriteLine($"Error in creating tables: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        ///     Seeds some dummy data in each table.
+        /// </summary>
+        /// <param name="query"> a dataQuery for inserting data into a table. </param>
+        private static void SeedDummyData(string query)
+        {
+            try
+            {
+                using SqlConnection connection = new SqlConnection(connectionString);
+                connection.Open();
+
+                using SqlCommand command = new SqlCommand(query, connection);
+                command.ExecuteNonQuery();
+
+                Console.WriteLine("Successfully added data into the table!");
+            }
+            catch (SqlException e)
+            {
+                Console.WriteLine($"Error in seeding dummy data: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        ///     Seeds dummy data into the new tables all at once.
+        /// </summary>
+        /// <param name="query1"> first data tableQuery </param>
+        /// <param name="query2"> second data tableQuery </param>
+        /// <param name="query3"> third data tableQuery </param>
+        /// <param name="query4"> fourth data tableQuery </param>
+        /// <param name="query5"> fifth data tableQuery </param>
+        private static void SeedDummyDatas(string query1, string query2, string query3, string query4, string query5)
+        {
+            SeedDummyData(query1);
+            SeedDummyData(query2);
+            SeedDummyData(query3);
+            SeedDummyData(query4);
+            SeedDummyData(query5);
         }
     }
 }
